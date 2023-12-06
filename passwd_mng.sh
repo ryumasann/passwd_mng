@@ -18,7 +18,6 @@ while true; do
         login_info=$(grep ^${service_name}: $faile_path)
         if [ -z $login_info ]; then
             echo "そのサービスは登録されていません。"
-            echo $login_info
             continue
         fi
         IFS=':'
