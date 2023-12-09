@@ -55,7 +55,7 @@ while true; do
         # 空文字使用禁止
         # TODO
         echo "$service_name:$user_name:$user_passwd" >>$file_path
-        echo "パスワードの追加は成功しました。"
+        echo "/nパスワードの追加は成功しました。"
         # Add Passwordでファイル作成後にGet Passwordする場合のため
         file_exists="true"
         ;;
