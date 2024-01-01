@@ -17,7 +17,7 @@ check_service_existance() {
 
     if [[ $file_exists == "true" ]]; then
         while read line; do
-            plain_pass=`echo "$line" | openssl enc -d -aes-256-cbc -iter 100 -base64 -k "$ssl_key"`
+            plain_pass=$(echo "$line" | openssl enc -d -des -base64 -k "$ssl_key")
             plain_pass_space_separated=${plain_pass//:/ }
             plain_pass_list=($plain_pass_space_separated)
             if [[ $plain_pass_list[0] == $service_name ]]; then
@@ -70,7 +70,16 @@ while true; do
     read "input?次の選択肢から入力してください(Add Password/Get Password/Exit)："
     case $input in
     "Add Password")
-        read "service_name?サービス名を入力してください："
+        while true; do
+            read "service_name?サービス名を入力してください："
+            # 空文字使用禁止
+            if [ -z "$service_name" ]; then
+                echo "空文字は設定できません。再入力してください"
+                continue
+            fi
+            break
+        done
+
         # サービス名の重複防止
         check_service_existance "$file_exists" "$file_path" "$service_name" "$ssl_key"
         if [[ $? -eq 0 ]]; then
@@ -78,14 +87,16 @@ while true; do
             continue
         fi
 
-        read "user_name?ユーザー名を入力してください："
-        read "user_passwd?パスワードを入力してください："
-
         # 空文字使用禁止
-        if [ -z "$service_name" ] || [ -z "$user_name" ] || [ -z "$user_passwd" ] ||; then
-            echo "空文字は設定できません。再入力してください"
-            continue
-        fi
+        while true; do
+            read "user_name?ユーザー名を入力してください："
+            read "user_passwd?パスワードを入力してください："
+            if [ -z "$user_name" ] || [ -z "$user_passwd" ]; then
+                echo "空文字は設定できません。再入力してください"
+                continue
+            fi
+            break
+        done
 
         # 区切り文字の使用禁止
         check_colon "$service_name" "$user_name" "$user_passwd"
@@ -93,8 +104,8 @@ while true; do
             echo ":は区切り文字と使用しているため使用不可です。"
             continue
         fi
-        echo "$service_name:$user_name:$user_passwd" | openssl enc -e -aes-256-cbc -iter 100 -base64 -k "$ssl_key" >> $file_path
-        echo "/nパスワードの追加は成功しました。"
+        echo "$service_name:$user_name:$user_passwd" | openssl enc -e -des -base64 -k "$ssl_key" >>$file_path
+        echo "パスワードの追加は成功しました。"
         # Add Passwordでファイル作成後にGet Passwordする場合のため
         file_exists="true"
         ;;
@@ -106,18 +117,26 @@ while true; do
         fi
 
         echo "指定したサービスのログイン情報を「$file_path」から取得します"
-        read "service_name?サービス名を入力してください："
+        while true; do
+            read "service_name?サービス名を入力してください："
+            # 空文字使用禁止
+            if [ -z "$service_name" ]; then
+                echo "空文字は設定できません。再入力してください"
+                continue
+            fi
+            break
+        done
+
         while read line; do
-            plain_pass=`echo "$line" | openssl enc -d -aes-256-cbc -iter 100 -base64 -k "$ssl_key"`
-            plain_pass_space_separated=${plain_pass//:/ }
-            plain_pass_list=($plain_pass_space_separated)
-            if [[ $plain_pass_list[0] == $service_name ]]; then
+            plain_pass=$(echo "$line" | openssl enc -d -des -base64 -k "$ssl_key")
+            IFS=':' read -r file_service_name user_name passwd <<<"$plain_pass"
+            if [[ $file_service_name == $service_name ]]; then
                 echo "サービス名：$service_name"
                 echo "ユーザー名：$user_name"
                 echo "パスワード：$passwd"
                 continue 2
             fi
-        done < $file_path
+        done <$file_path
         echo "そのサービスは登録されていない、または使用したキーが間違っております。"
         echo "キーの誤りの場合は、一度処理を終了し、再度パスワードマネージャーを実行してください"
         ;;
