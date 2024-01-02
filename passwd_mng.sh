@@ -1,5 +1,6 @@
 #!/usr/bin/zsh
 FILE_PATH="my_passwd_list.txt"
+TMP_FILE_PATH="tmp_my_passwd_list.txt"
 OPTIONS="Add Password/Get Password/Exit"
 check_colon() {
     if [[ $1 == *:* || $2 == *:* || $3 == *:* ]]; then
@@ -10,21 +11,18 @@ check_colon() {
 }
 
 # ファイルにサービス名が既に存在するかチェックする関数
-check_service_existance() {
-    local file_exists=$1
-    local FILE_PATH=$2
-    local service_name=$3
-    local ssl_key=$4
+check_user_existance() {
+    local TMP_FILE_PATH=$1
+    local service_name=$2
+    local user_name=$3
+    local ssl_pass=$4
 
-    if [[ $file_exists == "true" ]]; then
-        while read line; do
-            plain_pass=$(echo "$line" | openssl enc -d -des -base64 -k "$ssl_key")
-            IFS=':' read -r file_service_name _ <<<"$plain_pass"
-            if [[ $file_service_name == $service_name ]]; then
-                return 0
-            fi
-        done <"$FILE_PATH"
-    fi
+    while read line; do
+        IFS=':' read -r file_service_name file_user_name _ <<<"$line"
+        if [[ $file_service_name == $service_name ]] && [[ $file_user_name == $user_name ]]; then
+            return 0
+        fi
+    done <$TMP_FILE_PATH
     return 1
 }
 
@@ -39,9 +37,9 @@ echo "パスワードマネージャーへようこそ！"
 while true; do
     echo "パスワードの暗号化、解読に使用するキーを登録してください"
     echo "※ここで入力した文字は次回以降も使用するため、必ず忘れないようにしてください"
-    read -s ssl_key
-    if [ -z "$ssl_key" ]; then
-        echo "空文字は設定できません。再入力してください"
+    read -s ssl_pass
+    if [ -z "$ssl_pass" ]; then
+        echo "空文字は設定できません。"
         continue
     fi
     break
@@ -57,28 +55,35 @@ while true; do
             read -s "user_passwd?パスワードを入力してください："
             # 空文字使用禁止
             if [ -z "$service_name" ] || [ -z "$user_passwd" ] || [ -z "$user_passwd" ]; then
-                echo "空文字は設定できません。再入力してください"
-                continue
-            fi
-
-            # サービス名の重複防止
-            check_service_existance "$file_exists" "$FILE_PATH" "$service_name" "$ssl_key"
-            if [[ $? -eq 0 ]]; then
-                echo "サービス名「$service_name」は既に登録されています。"
+                echo "\n空文字は設定できません。"
                 continue
             fi
 
             # 区切り文字の使用禁止
             check_colon "$service_name" "$user_name" "$user_passwd"
             if [[ $? -eq 0 ]]; then
-                echo ":は区切り文字と使用しているため使用不可です。"
+                echo "\n:は区切り文字と使用しているため使用不可です。"
                 continue
+            fi
+
+            if [[ $file_exists == "true" ]]; then
+                # サービス、ユーザー名の重複防止
+                openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass"
+                check_user_existance "$TMP_FILE_PATH" "$service_name" "$user_name" "$ssl_pass"
+                if [[ $? -eq 0 ]]; then
+                    echo "\nサービス名「$service_name」にユーザー「$user_name」は既に登録されています。"
+                    rm -f $TMP_FILE_PATH
+                    continue
+                fi
+                break
             fi
             break
         done
 
-        echo "$service_name:$user_name:$user_passwd" | openssl enc -e -des -base64 -k "$ssl_key" >>$FILE_PATH
+        echo "$service_name:$user_name:$user_passwd" >>$TMP_FILE_PATH
+        openssl enc -e -aes-256-cbc -in $TMP_FILE_PATH -out $FILE_PATH -pass pass:"$ssl_pass"
         echo "パスワードの追加は成功しました。"
+        rm -f $TMP_FILE_PATH
         # Add Passwordでファイル作成後にGet Passwordする場合のため
         file_exists="true"
         ;;
@@ -94,22 +99,32 @@ while true; do
             read "service_name?サービス名を入力してください："
             # 空文字使用禁止
             if [ -z "$service_name" ]; then
-                echo "空文字は設定できません。再入力してください"
+                echo "空文字は設定できません。"
                 continue
             fi
             break
         done
 
+        openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass"
+        has_service_name="false"
+        is_first_output="true"
         while read line; do
-            plain_pass=$(echo "$line" | openssl enc -d -des -base64 -k "$ssl_key")
-            IFS=':' read -r file_service_name user_name passwd <<<"$plain_pass"
+            IFS=':' read -r file_service_name file_user_name file_passwd <<<"$line"
             if [[ $file_service_name == $service_name ]]; then
-                echo "サービス名：$service_name"
-                echo "ユーザー名：$user_name"
-                echo "パスワード：$passwd"
-                continue 2
+                has_service_name="true"
+                if [[ $is_first_output == "true" ]]; then
+                    echo "サービス名：$file_service_name"
+                    is_first_output="false"
+                fi
+                echo "ユーザー名：$file_user_name"
+                echo "パスワード：$file_passwd"
             fi
-        done <$FILE_PATH
+        done <$TMP_FILE_PATH
+        rm -f $TMP_FILE_PATH
+
+        if [[ $has_service_name == "true" ]]; then
+            continue
+        fi
         echo "そのサービスは登録されていない、または使用したキーが間違っております。"
         echo "キーの誤りの場合は、一度処理を終了し、再度パスワードマネージャーを実行してください"
         ;;
