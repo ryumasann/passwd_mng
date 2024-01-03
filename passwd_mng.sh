@@ -1,7 +1,8 @@
 #!/usr/bin/zsh
 FILE_PATH="my_passwd_list.txt"
 TMP_FILE_PATH="tmp_my_passwd_list.txt"
-OPTIONS="Add Password/Get Password/Exit"
+TMP_CHANGED_PASSWD_FILE_PATH="tmp_change_my_passwd_list.txt"
+OPTIONS="Add Password/Get Password/Change Password/Exit"
 check_colon() {
     if [[ $1 == *:* || $2 == *:* || $3 == *:* ]]; then
         return 0
@@ -128,10 +129,54 @@ while true; do
         echo "そのサービスは登録されていない、または使用したキーが間違っております。"
         echo "キーの誤りの場合は、一度処理を終了し、再度パスワードマネージャーを実行してください"
         ;;
-    # "Change Password")
-    #   TODO
-    #     continue
-    #     ;;
+    "Change Password")
+        if [[ $file_exists == "false" ]]; then
+            echo "ファイル'$FILE_PATH'が存在しません。" \
+                "\n「Add Password」を入力し、パスワードリストファイルを作成してください。"
+            continue
+        fi
+
+        echo "指定されたサービスのユーザーパスワードを変更します。"
+        while true; do
+            read "service_name?サービス名を入力してください："
+            read "user_name?ユーザー名を入力してください："
+            read -s "new_passwd?新しいパスワードを入力してください："
+            # 空文字使用禁止
+            if [ -z "$service_name" ] || [ -z "$user_name" ] || [ -z "$new_passwd" ]; then
+                echo "\n空文字は設定できません。"
+                continue
+            fi
+
+            # 区切り文字の使用禁止
+            check_colon "$service_name" "$user_name" "$new_passwd"
+            if [[ $? -eq 0 ]]; then
+                echo "\n:は区切り文字と使用しているため使用不可です。"
+                continue
+            fi
+            break
+        done
+
+        changed_flag="false"
+        openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass"
+        while read line; do
+            IFS=':' read -r file_service_name file_user_name file_passwd <<<"$line"
+            if [[ $file_service_name == $service_name ]] && [[ $file_user_name == $user_name ]]; then
+                echo "${line//$file_passwd/$new_passwd}" >>"$TMP_CHANGED_PASSWD_FILE_PATH"
+                changed_flag="true"
+            else
+                echo "$line" >>"$TMP_CHANGED_PASSWD_FILE_PATH"
+            fi
+        done <$TMP_FILE_PATH
+        if [[ $changed_flag == "true" ]]; then
+            openssl enc -e -aes-256-cbc -in $TMP_CHANGED_PASSWD_FILE_PATH -out $FILE_PATH -pass pass:"$ssl_pass"
+            echo "\nサービス名「$service_name」のユーザー名「$user_name」のパスワードは変更されました。"
+            rm -f "$TMP_FILE_PATH" "$TMP_CHANGED_PASSWD_FILE_PATH"
+        else
+            echo "\nサービス「$service_name」のユーザー「$user_name」は登録されていない、または使用したキーが間違っております。"
+            echo "キーの誤りの場合は、一度処理を終了し、再度パスワードマネージャーを実行してください"
+            rm -f "$TMP_FILE_PATH" "$TMP_CHANGED_PASSWD_FILE_PATH"
+        fi
+        ;;
     "Exit")
         echo "処理を終了します"
         break
