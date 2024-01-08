@@ -36,7 +36,7 @@ fi
 echo "パスワードマネージャーへようこそ！"
 # 暗号化キー入力
 while true; do
-    echo "パスワードの暗号化、解読に使用するキーを登録してください"
+    echo "パスワードの暗号化、復号に使用するキーを登録してください"
     echo "※ここで入力した文字は次回以降も使用するため、必ず忘れないようにしてください"
     read -s ssl_pass
     if [ -z "$ssl_pass" ]; then
@@ -69,7 +69,7 @@ while true; do
 
             if [[ $file_exists == "true" ]]; then
                 # サービス、ユーザー名の重複防止
-                openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass"
+                openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass" 2>/dev/null
                 check_user_existance "$TMP_FILE_PATH" "$service_name" "$user_name" "$ssl_pass"
                 if [[ $? -eq 0 ]]; then
                     echo "\nサービス名「$service_name」にユーザー「$user_name」は既に登録されています。"
@@ -106,7 +106,7 @@ while true; do
             break
         done
 
-        openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass"
+        openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass" 2>/dev/null
         has_service_name="false"
         is_first_output="true"
         while read line; do
@@ -157,7 +157,7 @@ while true; do
         done
 
         changed_flag="false"
-        openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass"
+        openssl enc -d -aes-256-cbc -in $FILE_PATH -out $TMP_FILE_PATH -pass pass:"$ssl_pass" 2>/dev/null
         while read line; do
             IFS=':' read -r file_service_name file_user_name file_passwd <<<"$line"
             if [[ $file_service_name == $service_name ]] && [[ $file_user_name == $user_name ]]; then
